@@ -1,3 +1,116 @@
+# Docker for Desktop
+
+- *Kube version in Docker for Desktop is 1.16, is there a newer version?
+  Latest version is using 1.18.x
+  
+## Ingress controller - installation
+
+- [Installation of the controller](https://kubernetes.github.io/ingress-nginx/deploy/#docker-for-mac)
+
+```
+< k8s/base + master > kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.40.2/deploy/static/provider/cloud/deploy.yaml
+namespace/ingress-nginx created
+serviceaccount/ingress-nginx created
+configmap/ingress-nginx-controller created
+clusterrole.rbac.authorization.k8s.io/ingress-nginx created
+clusterrolebinding.rbac.authorization.k8s.io/ingress-nginx created
+role.rbac.authorization.k8s.io/ingress-nginx created
+rolebinding.rbac.authorization.k8s.io/ingress-nginx created
+service/ingress-nginx-controller-admission created
+service/ingress-nginx-controller created
+deployment.apps/ingress-nginx-controller created
+validatingwebhookconfiguration.admissionregistration.k8s.io/ingress-nginx-admission created
+serviceaccount/ingress-nginx-admission created
+clusterrole.rbac.authorization.k8s.io/ingress-nginx-admission created
+clusterrolebinding.rbac.authorization.k8s.io/ingress-nginx-admission created
+role.rbac.authorization.k8s.io/ingress-nginx-admission created
+rolebinding.rbac.authorization.k8s.io/ingress-nginx-admission created
+job.batch/ingress-nginx-admission-create created
+job.batch/ingress-nginx-admission-patch created
+```
+  
+## Ingres controller - Use of it
+
+- ?? If I deployed the application using locally running "Docker
+  for Desktop" or "Minikube", what is the hostname of the ingress?
+  By default, ingress controller is not installed in Docker for
+  Desktop container.
+  
+```
+< workspace/pal-tracker + master > k get all --namespace=development
+NAME                                          READY   STATUS    RESTARTS   AGE
+pod/pal-tracker-development-b8d6dbb6c-rzt68   1/1     Running   0          31m
+
+NAME                              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/pal-tracker-development   ClusterIP   10.102.219.45   <none>        8080/TCP   31m
+
+NAME                                      READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/pal-tracker-development   1/1     1            1           31m
+
+NAME                                                DESIRED   CURRENT   READY   AGE
+replicaset.apps/pal-tracker-development-b8d6dbb6c   1         1         1       31m
+```
+
+```
+< workspace/pal-tracker + master > k get ingress --namespace=development
+NAME                      CLASS    HOSTS                           ADDRESS     PORTS   AGE
+pal-tracker-development   <none>   development.tracker.localhost   localhost   80      28m
+```
+
+```
+< workspace/pal-tracker + master > cat /etc/hosts
+##
+# Host Database
+#
+# localhost is used to configure the loopback interface
+# when the system is booting.  Do not change this entry.
+##
+127.0.0.1	localhost
+127.0.0.1   passion
+255.255.255.255	broadcasthost
+::1             localhost
+192.168.99.100  blue.example.com gree.example.com
+# Added by Docker Desktop
+# To allow the same kube context to work on the host and the container:
+127.0.0.1 kubernetes.docker.internal
+127.0.0.1 development.tracker.localhost
+127.0.0.1 review.tracker.localhost
+```
+
+```
+< workspace/pal-tracker + master > curl review.tracker.localhost
+hello from review
+```
+
+## Nodeport
+  
+- I was able to create NotePort and then can access it.
+  ?? How about through Ingress?
+  
+```
+< workspace/pal-tracker - master > k expose deployment.apps/pal-tracker --name=pal-tracker-service-nodeport --type=NodePort --port=8080service/pal-tracker-service-nodeport exposed
+
+< workspace/pal-tracker - master > ka
+NAME                              READY   STATUS    RESTARTS   AGE
+pod/pal-tracker-c884fccff-qz7qm   1/1     Running   0          54m
+
+NAME                                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+service/kubernetes                     ClusterIP   10.96.0.1       <none>        443/TCP          58m
+service/pal-tracker                    ClusterIP   10.97.100.233   <none>        8080/TCP         54m
+service/pal-tracker-service-nodeport   NodePort    10.97.55.121    <none>        8080:31292/TCP   2s
+
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/pal-tracker   1/1     1            1           54m
+
+NAME                                    DESIRED   CURRENT   READY   AGE
+replicaset.apps/pal-tracker-c884fccff   1         1         1       54m
+
+< workspace/pal-tracker - master > curl localhost:31292
+hello from kubernetes
+```
+
+
+
 # What is this instructor-note for?
 
 This is a collection of "tips and tricks" I've collected
@@ -19,17 +132,19 @@ in teaching PAL CND, which includes
 ```
 # Kubernetes
 alias k=kubectl
-export KUBE_EDITOR=code
+export KUBE_EDITOR=code  (if you want to use Visual Studio Code as editor of choice)
 alias siege1='siege -p http://development.sashin.k8s.pal.pivotal.io/ -r1000 -q'
 alias refresh='source ~/.bashrc'
 alias test1='curl http://development.sashin.k8s.pal.pivotal.io/'
 alias test2='curl http://review.sashin.k8s.pal.pivotal.io/'
 ```
 
+- [Ubuntu shortcut keys](https://www.omgubuntu.co.uk/2019/09/useful-ubuntu-keyboard-shortcuts)
+
 ```
 - Keyboard shortcut keys within Remote Desktop
   - ALT+F10 (maximizing window on and off)
-  - ALT+Tab (move between windows)
+  - ALT+Tab (move between windows - works only on Mac)
   - ALT+F9 (minimize window)
   - SHIFT+CTRL+C (copying from termimal) 
   - SHIFT+CTRL+V (copying to the terminal)
@@ -84,6 +199,7 @@ and here is your service account info:
 
 # Steps for fresh demo
 
+- This is codebase
 - https://github.com/platform-acceleration-lab/pal-tracker-k8s-deployment
 
 - Take the followin steps
@@ -91,13 +207,19 @@ and here is your service account info:
 ```
 - cd <pal-tracker>
 - git reset --hard <solution-tag>
-- cd ../pal-tracker-deployment-k8s
+- cd ../k8s
 - git reset --hard <solution-tag>
-- cp -r ./*.yaml ../pal-tracker/k8s (?? Try this)
-- cd <pal-tracker>
-- change DOCKER-USER-NAME in the base/deployment.yaml
-- change domain name in the environments/development/ingress.yaml
-- change domain name in the environments/review/ingress.yaml
+- cp -r . ../pal-tracker/k8s (?? Try this)
+- cd ../pal-tracker
+- rm -rf k8s/.git
+- rm -rf k8s/.gitignore
+- rm -rf k8s/*.txt
+- (change YOUR-DOCKERHUB-USERNAME in the k8s/base/deployment.yaml)
+  gsed -i 's/YOUR-DOCKERHUB-USERNAME/axykim00/g' k8s/base/deployment.yaml
+- (change domain name in the k8s/environments/development/ingress.yaml)
+  gsed -i 's/UNIQUE-DOMAIN-FOR-DEVELOPMENT-ENVIRONMENT/development.tracker.localhost/g' k8s/environments/development/ingress.yaml
+- (change domain name in the k8s/environments/review/ingress.yaml)
+  gsed -i 's/UNIQUE-DOMAIN-FOR-REVIEW-ENVIRONMENT/review.tracker.localhost/g' k8s/environments/development/ingress.yaml
 - kubectl apply -k k8s/environments/development
 - kubectl apply -k k8s/environments/review
 ```
@@ -210,11 +332,19 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 - Write integration testing code using @SpringBootTest and TestRestTemplate
 
 
-# Containerizing an App
+# Containerizing an App --------------------
+
+## Intro
+
+- ?? Explain the buildImage command result
+- (Mike) Dockerfile is hard to create secure and smaill docker image
+- Buildpack (link is on the top) - if you have used pcf, this should sound familar
 
 ## Extra resources
 
 - [What's new in Spring Boot 2.3](https://www.youtube.com/watch?v=WL7U-yGfUXA)
+- [Explore Docker layers using dive](https://www.upnxtblog.com/index.php/2020/04/27/explore-docker-layers-using-dive/)
+- [Jib](https://cloud.google.com/blog/products/gcp/introducing-jib-build-java-docker-images-better)
 
 ## Misc.
 
@@ -225,20 +355,165 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 - Install and try "dive" to analyze the layers of docker image
 
 ```
+cd ~
 wget https://github.com/wagoodman/dive/releases/download/v0.9.2/dive_0.9.2_linux_amd64.deb
 sudo apt install ./dive_0.9.2_linux_amd64.deb
 
 dive pal-tracker
 ```
 
-## Deploying to K8s (??)
+## Wrap-up
+
+- how to create docker image best practices
+- let experts do the job right
+- OCI compatible image
+- the 6 lines of code in the buildpack - how many containers are being pulled
+- 2 pulling commands??
+- what image we are running?
+- docker hub, what linux image it is using??
+
+## Deploying a Containerized App to Kubernetes -------
 
 ## Intro
 
-- Use VSC with terminal window on the right configuration
-- *What is the domain name? development.sashin.k8s.pal.pivotal.io
+- Use VSC or IntelliJ with terminal window on the right configuration
+- Bill shows the k8s website that compares traditional,vitual machine, container ??
+ "what is kubernetes"?
+- (Mike) k8s is not a platfrom, it is tool for building a platform
 
-## Challenge exercises
+- we already set up a credential in the config file to talk to the k8s
+
+## Misc questions for me
+
+- ?? How can I find out the port number the pod is listening to?
+  - maybe "k describe po <pod>" and check the targetPort?
+- ?? Is there any other way to 
+  find the IP addresses of a node without using "ip address"
+  (Answer - Octant shows it as an InternalIP for the node detail)
+  
+
+## Challenge exercises - accessing pod
+
+- Access the pod - A kubectl exec command serves for 
+  executing commands in Docker containers running inside 
+  Kubernetes Pods.
+  
+- ?? what does CNB stand for? Cloud Native Buildpack?
+
+```
+ubuntu@mylab:~$ k exec -it pal-tracker-747dff7c4-vps7f -- /bin/bash
+
+$ env
+KUBERNETES_PORT=tcp://10.96.0.1:443
+KUBERNETES_SERVICE_PORT=443
+PAL_TRACKER_PORT_8080_TCP_PORT=8080
+PAL_TRACKER_PORT_8080_TCP_PROTO=tcp
+CNB_PLATFORM_API=0.3
+HOSTNAME=pal-tracker-747dff7c4-kfhhh
+PAL_TRACKER_SERVICE_PORT=8080
+PAL_TRACKER_PORT=tcp://10.105.137.94:8080
+CNB_DEPRECATION_MODE=quiet
+HOME=/home/cnb
+PAL_TRACKER_PORT_8080_TCP=tcp://10.105.137.94:8080
+CNB_APP_DIR=/workspace
+CNB_LAYERS_DIR=/layers
+TERM=xterm
+KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+KUBERNETES_PORT_443_TCP_PORT=443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_SERVICE_PORT_HTTPS=443
+KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443
+KUBERNETES_SERVICE_HOST=10.96.0.1
+PWD=/
+PAL_TRACKER_PORT_8080_TCP_ADDR=10.105.137.94
+PAL_TRACKER_SERVICE_HOST=10.105.137.94. (This is clusterIP address of pal-tracker service)
+$
+
+cnb@pal-tracker-747dff7c4-vps7f:/$ ps -aef
+UID          PID    PPID  C STIME TTY          TIME CMD
+cnb            1       0  0 00:38 ?        00:00:50 java org.springframework.boot.loader.JarLauncher
+cnb          222       0  0 12:20 pts/0    00:00:00 /bin/bash
+cnb          234     222  0 12:20 pts/0    00:00:00 ps -aef
+cnb@pal-tracker-747dff7c4-vps7f:/$ pwd
+/
+cnb@pal-tracker-747dff7c4-vps7f:/$ ls
+bin  boot  cnb  dev  etc  home  layers  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var  workspace
+
+cnb@pal-tracker-747dff7c4-vps7f:/$ hostname 
+pal-tracker-747dff7c4-vps7f
+cnb@pal-tracker-747dff7c4-vps7f:/$ hostname -I
+192.168.15.9 
+
+cnb@pal-tracker-747dff7c4-vps7f:/$ find . -name \*.class -print
+
+./workspace/org/springframework/boot/loader/data/RandomAccessDataFile.class
+./workspace/org/springframework/boot/loader/data/RandomAccessDataFile$1.class
+./workspace/org/springframework/boot/loader/ExecutableArchiveLauncher.class
+./workspace/org/springframework/boot/loader/PropertiesLauncher$ClassPathArchives.class
+./workspace/BOOT-INF/classes/io/pivotal/pal/tracker/PalTrackerApplication.class
+./workspace/BOOT-INF/classes/io/pivotal/pal/tracker/WelcomeController.class
+
+cnb@pal-tracker-747dff7c4-vps7f:/workspace$ ls BOOT-INF
+classes  classpath.idx  lib
+cnb@pal-tracker-747dff7c4-vps7f:/workspace$ ls BOOT-INF/lib
+jackson-annotations-2.11.0.jar             jakarta.el-3.0.3.jar       snakeyaml-1.26.jar                           spring-boot-starter-logging-2.3.1.RELEASE.jar  spring-jcl-5.2.7.RELEASE.jar
+jackson-core-2.11.0.jar                    jul-to-slf4j-1.7.30.jar    spring-aop-5.2.7.RELEASE.jar                 spring-boot-starter-tomcat-2.3.1.RELEASE.jar   spring-web-5.2.7.RELEASE.jar
+jackson-databind-2.11.0.jar                log4j-api-2.13.3.jar       spring-beans-5.2.7.RELEASE.jar               spring-boot-starter-web-2.3.1.RELEASE.jar      spring-webmvc-5.2.7.RELEASE.jar
+jackson-datatype-jdk8-2.11.0.jar           log4j-to-slf4j-2.13.3.jar  spring-boot-2.3.1.RELEASE.jar                spring-cloud-bindings-1.6.0.jar                tomcat-embed-core-9.0.36.jar
+jackson-datatype-jsr310-2.11.0.jar         logback-classic-1.2.3.jar  spring-boot-autoconfigure-2.3.1.RELEASE.jar  spring-context-5.2.7.RELEASE.jar               tomcat-embed-websocket-9.0.36.jar
+jackson-module-parameter-names-2.11.0.jar  logback-core-1.2.3.jar     spring-boot-starter-2.3.1.RELEASE.jar        spring-core-5.2.7.RELEASE.jar
+jakarta.annotation-api-1.3.5.jar           slf4j-api-1.7.30.jar       spring-boot-starter-json-2.3.1.RELEASE.jar   spring-expression-5.2.7.RELEASE.jar
+
+```
+
+## Challenge questions/exercises - Service
+
+- How does Service keeps track of the internal IP addresses
+  of the pods it is front-end'ing?
+  
+- Try to create NodePort type
+
+- You can create nodeport as following
+
+```
+ubuntu@mylab:~$ k expose deployment.apps/pal-tracker --name=pal-tracker-servie-nodeport --type=NodePort --port=8080 
+
+ubuntu@mylab:~$ k get svc
+NAME                          TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+pal-tracker                   ClusterIP   10.107.244.109   <none>        8080/TCP         12h
+pal-tracker-servie-nodeport   NodePort    10.99.210.37     <none>        8080:30612/TCP   31s
+
+ubuntu@mylab:~$ ip address
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9001 qdisc mq state UP group default qlen 1000
+    link/ether 02:55:ed:e9:61:cf brd ff:ff:ff:ff:ff:ff
+    inet 172.31.19.166/20 brd 172.31.31.255 scope global dynamic eth0
+       valid_lft 2558sec preferred_lft 2558sec
+    inet6 fe80::55:edff:fee9:61cf/64 scope link 
+       valid_lft forever preferred_lft forever
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:2d:01:f7:ae brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:2dff:fe01:f7ae/64 scope link 
+    
+ubuntu@mylab:~$ curl 172.31.19.166:30612
+hello
+
+ubuntu@mylab:~$ curl mylab:30612. (You can use node name)
+hello
+
+ubuntu@mylab:~$ curl 54.151.120.233.nip.io (development domain - using ingress)
+hello from kubernetes
+```
+
+## Challenge exercises - Ingress
 
 - For Ingress object, try to use host
 
@@ -253,8 +528,8 @@ metadata:
     kubernetes.io/ingress.class: nginx
 spec:
   rules:
-  - host: abc.development.sashin.k8s.pal.pivotal.io
-    http:
+  #- host:  54.151.120.233.nip.io
+  - http:
       paths:
       - path: /
         backend:
@@ -265,7 +540,171 @@ spec:
     servicePort: 8080
 ```
 
+?? When I tried above, I get the following
+
+```
+<html>
+<head><title>308 Permanent Redirect</title></head>
+<body>
+<center><h1>308 Permanent Redirect</h1></center>
+<hr><center>nginx/1.15.8</center>
+</body>
+</html>
+```
+
+- What about the following?
+
+```
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: pal-tracker
+  labels:
+    app: pal-tracker
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix     # added this
+        backend:
+          serviceName: pal-tracker
+          servicePort: 8080
+```
+
+I get the same error above.
+
+- The following works - with host included
+
+```
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: pal-tracker
+  labels:
+    app: pal-tracker
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host:  3.101.115.109.nip.io
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: pal-tracker
+              servicePort: 8080
+```
+
+
+- *what about the following?  (this is due to k 1.8 vs 1.9 difference)
+
+```
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: pal-tracker
+  labels:
+    app: pal-tracker
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pal-tracker
+            port:
+              number: 8080
+```
+
+You the following error
+
+```
+ubuntu@mylab:~/workspace/k8s$ k apply -f .
+deployment.apps/pal-tracker unchanged
+service/pal-tracker unchanged
+error: error validating "ingress.yaml": error validating data: ValidationError(Ingress.spec.rules[0].http.paths[0].backend): unknown field "service" in io.k8s.api.networking.v1beta1.IngressBackend; if you choose to ignore these errors, turn validation off with --validate=false
+```
+
+## DNS
+
+- How dns works.  Each pod is configured with the nameserver with the
+  ip address of the kube-dns service.
+  [How k8s dns works](https://www.digitalocean.com/community/tutorials/an-introduction-to-the-kubernetes-dns-service#:~:text=A%20service%20named%20kube-dns%20and%20one%20or%20more,or%20delete%20Kubernetes%20services%20and%20their%20associated%20pods.)
+  
+```
+NAMESPACE     NAME                              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
+default       service/kubernetes                ClusterIP   10.96.0.1       <none>        443/TCP                  48m
+development   service/pal-tracker-development   ClusterIP   10.102.219.45   <none>        8080/TCP                 10m
+kube-system   service/kube-dns                  ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP   48m
+```
+
+```
+< k8s/base + master > k exec -it pod/pal-tracker-development-b8d6dbb6c-rzt68 --namespace=development -- /bin/sh
+$ cat /etc/resolv.conf
+nameserver 10.96.0.10. (# this is the kube-dns service ip address)
+search development.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5
+
+< workspace/pal-tracker + master > k get svc --all-namespaces
+NAMESPACE     NAME             TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
+default       kubernetes       ClusterIP   10.96.0.1       <none>        443/TCP                  21h
+development   pal-tracker      ClusterIP   10.105.137.94   <none>        8080/TCP                 13h
+kube-system   kube-dns         ClusterIP   10.96.0.10      <none>        53/UDP,53/TCP,9153/TCP   21h
+kube-system   metrics-server   ClusterIP   10.101.231.8    <none>        443/TCP                  21h
+```
+
+## RestTemplate to another service
+
+```
+@RestController
+public class WelcomeController {
+
+    private RestTemplate restTemplate;
+
+    public WelcomeController(RestTemplateBuilder restTemplateBuilder) {
+        this.restTemplate = restTemplateBuilder.build();
+    }
+
+    @GetMapping("/")
+    public String sayHello() {
+        return "hello";
+    }
+
+    // This works
+    @GetMapping("/dest1")
+    public String talkToDest2() {
+        return restTemplate.getForObject("http://dest.3.101.115.109.nip.io", String.class);
+    }
+
+    // This does not work
+    @GetMapping("/dest2")
+    public String talkToDest1() {
+        return restTemplate.getForObject("http://pal-tracker-dest", String.class);
+    }
+}
+```
+
 ## Wrap-up
+
+- (Bill) create vs apply (here we go and platform apply the changes)
+  - declarative model is recommended. k apply -f k8s
+  - we are giving a state (declarative model) - we are not creating (imperative model)
+  - imperative model is k create deploy ...
+  - why we choose declative model?
+    - enable infrastructure of code model - store the state
+
+- Can you access the pod directly from external client?  no, we need to have service
+- clusterip, dns
+
+- ingress, group and kind from the api document
+- annotation ingress - nginx controller
 
 - Talk about each resource in the lab - use the diagram
 
@@ -279,36 +718,141 @@ spec:
 
 ## Misc.
 
-- kubectl create vs apply - imperative vs declarative (Mike G)
+- ??kubectl create vs apply - imperative vs declarative (Mike G)
 
-# Using ConfigMaps to set environment variables
 
-- ?? We could make the following as optional exercise -Logging document from K8s ref document
+
+# Clusers and Nodes -------------------------
+
+## Intro
+
+- control plane, node - used to be called master and worker nodes
+- they can physical machine, more likely vm
+- etcd maintains desired state 
+- etcd - highly reliable, distributed data store
+- api server - kubectl commands or octant talk to it - it is rest call
+- controller manager - process loop to handle desired state and actual state
+  - they are controllers inside the controller manager
+  - controller mananger is a single process??
+  - kube scheduller?
+
+- kube-proxy - handle network traffic
+- kubelet is an agent that talks to the contol plane
+- container runtime interface (software interface) - there are multiple implementations
+  - docker, curio??
+- container networking interface
+- container storage interface
+
+- kubelet talks to these interfaces defined above
+- what are three netwokring behaviors that are needed?
+
+
+## Misc
+
+```
+ubuntu@mylab:~$ kubectl cluster-info
+Kubernetes master is running at https://172.31.19.166:6443
+KubeDNS is running at https://172.31.19.166:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+Metrics-server is running at https://172.31.19.166:6443/api/v1/namespaces/kube-system/services/https:metrics-server:/proxy
+
+```
+
+```
+ubuntu@mylab:~$ k get nodes
+NAME    STATUS   ROLES    AGE   VERSION
+mylab   Ready    master   14h   v1.18.6
+```
+
+## Resources to use 
+
+- [Udemy CKAD course architecture](https://www.udemy.com/course/certified-kubernetes-application-developer/learn/lecture/12299412#questions)
+
+- [Cloud controller manager](https://kubernetes.io/docs/concepts/architecture/cloud-controller/)
+
+- Container runtime is underlying software that is used to run containers.
+  In our example, it happens to be docker.  Other options are rkt and CRI-O.
+
+# Using ConfigMaps to set Env. variabkes-----
+
+- *what is the development domain?
+
+```
+Try navigating to the development domain using a web browser. You will now see the welcome message you set in the ConfigMap.
+```
+
+- *We could make the following as optional exercise -Logging document from K8s ref document
 
 ```
 On the Google Compute Engine (GCE) platform, the default logging support targets Stackdriver Logging, which is described in detail in the Logging With Stackdriver Logging.
 
 This article describes how to set up a cluster to ingest logs into Elasticsearch and view them using Kibana, as an alternative to Stackdriver Logging when running on GCE.
 ```
-
-- ?? Do we use this in our lab?  What is the lab that does logging?
 - configmap vs using env in the deployment
-- Keith says Spring Boot K8s lets having configmap to be testable in TDD?
+- ?? Keith says Spring Boot K8s lets having configmap to be testable in TDD?
 
-# Actuator
+## Wrap-up
+
+- Changing configmap itself does not trigger the restart the pods
+  https://blog.questionable.services/article/kubernetes-deployments-configmap-change/
+- (Bill) its behavior is similar to PCF where changing environment variables
+  does not automatically restart the apps
+- (Charles) You might be in the process of updating configuration
+  files, which you do not want to get reflected right away
+- Fedex is using spring cloud config server for getting common
+  config data for multiple apps
+- (Mike) Greenfield project vs legacy apps
+- However, if the configmap is managed via a volume then, the pod
+  will get restarted if it is configured with some kind of file watch
+- ReplicaSet and Pods are created whenever deployment yaml file changes, however
+
+
+# Actuator-----------------------------
 
 ## Intro
 
 - cost and benefit analysis - free?
 - monitoring and management (refresh, logging)
 
+- (fedex) appdynamics
+- acruator are diggnostics tools
+- backingservice is simulated backing service
+- spring boot will give healthindicators for various backing services
+- assignment - make
+
 ## Wrap-up
+
+- exposing these endpoints good idea in production?
+- /actuator/env - does it expose database credentials?
+- they are mostly development time tools
+- dont use on k8s
+
+- Healthindiator status 200 vs 503
+- subsequent lab shows how k8s uses health indicator
+
+- actuator follows spring security scheme (beyond the scope of this class)
 
 - Bill went through all endpoints using Postman
    - all down 
 - Actuator vs Platform-provided tool (dynatrace or appdyanmics)
 
-# Configurating Availability State Probes
+## Trouble-shooting
+
+- *The build info shows the following - why it does not 
+  show version and group?
+
+```
+{
+"build": {
+"artifact": "pal-tracker",
+"name": "pal-tracker",
+"time": "2020-10-31T17:53:03.867Z",
+"version": "unspecified",
+"group": ""
+}
+}
+```
+
+# Availability Probes--------------------
 
 ## Intro
 
@@ -329,13 +873,40 @@ The code example in the PalTrackerFailure is an example of one way to define a L
 - application should deal with transitent failure - production env - you can tune only in production
 - what would be good candidates for liveness probes - out of memory, not network blip
 
-# Configuring RollingUpdate Deployments
+# Configuring RollingUpdate Deployments----
+
+## Tips
+
+- load test command
+
+```
+run-load-test -d 300 -u 10 -w 10 -n development http://54.151.120.233.nip.io
+```
+
+```
+pal-tracker-7f9885f6c7-wq72v   1/1     Running   0          3h26m
+loadtest                       0/1     Pending   0          0s
+loadtest                       0/1     Pending   0          1s
+loadtest                       0/1     ContainerCreating   0          1s
+loadtest                       0/1     ContainerCreating   0          1s
+loadtest                       1/1     Running             0          23s
+pal-tracker-7fb74cf8fb-hh7ql   0/1     Pending             0          0s
+pal-tracker-7fb74cf8fb-hh7ql   0/1     Pending             0          0s
+pal-tracker-7fb74cf8fb-hh7ql   0/1     ContainerCreating   0          0s
+pal-tracker-7fb74cf8fb-hh7ql   0/1     ContainerCreating   0          1s
+pal-tracker-7fb74cf8fb-hh7ql   1/1     Running             0          2s
+pal-tracker-7f9885f6c7-wq72v   1/1     Terminating         0          3h30m
+pal-tracker-7f9885f6c7-wq72v   0/1     Terminating         0          3h30m
+pal-tracker-7f9885f6c7-wq72v   0/1     Terminating         0          3h30m
+pal-tracker-7f9885f6c7-wq72v   0/1     Terminating         0          3h30m
+```
 
 - The lab document says to create docker v2. How do I create a new docker image?
 
 ```
-docker tag pal-tracker YOUR-DOCKER-HUB-USERNAME/pal-tracker:v0
-docker push YOUR-DOCKER-HUB-USERNAME/pal-tracker:v0
+./gradlew bootBuildImage
+docker tag pal-tracker YOUR-DOCKER-HUB-USERNAME/pal-tracker:v2
+docker push YOUR-DOCKER-HUB-USERNAME/pal-tracker:v2
 ```
 
 - this is how to create a new version
@@ -349,64 +920,20 @@ docker push axykim00/pal-tracker:v2
 
 - ??two messages race condition
   - show architecure document - controller is a loop checking etds for messages
-  -delete pod (pod controller picked up) - will wait 10 seconds before killing it
-  -stop routing message (by service controller)
-  -?? spring drain 
-  -why is prestop not built-in in k8s? k8s says it is not my problem
-   it can be handled by higher level abstraction
+  - delete pod (pod controller picked up) - will wait 10 seconds before killing it
+  - stop routing message (by service controller)
+  - ?? spring drain 
+  - why is prestop not built-in in k8s? k8s says it is not my problem
+    it can be handled by higher level abstraction
    
 - 12 facotor app
-  -strip out as much as from yur spring boot app - faster start up
-  -stopping micro-services?? challenge
-  -scalabiltu
+  - strip out as much as from yur spring boot app - faster start up
+  - stopping micro-services?? challenge
+  - scalabilty
   
   
-  
-# Liveness probe
+# Scaling an App with Kubernetes--------
 
-- ??step 6 - it is not 10 seconds it is 2 hand half miunutes
-- ??step 7 strange behavior - use siege instead of browser
-
-# Multi-enviroment
-
-- *After reseting pal-tracker-k8s-development to multi-environment solution, I get the following error. (answer) I have to use -k like `kubectl apply -k k8s/environments/development`
-
-```
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/review
-configmap/pal-tracker created
-ingress.networking.k8s.io/pal-tracker created
-error: error validating "k8s/environments/review/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/development
-configmap/pal-tracker configured
-ingress.networking.k8s.io/pal-tracker configured
-error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-```
-
-# Pipeline
-
-## Intro
-
-- What is CI, why CI?
-  - many developers are working on a project, we can move faster,
-  - remove merge conflict after waiting for a week
-- steps for CI (bill used PCF slide)
-- Bill likes concourse - versioning jar files
-- what and why CD? 
-  - make our app to be usable, release frequently
-  - deploy smmothly and consistently
-  - Bill does not like to use the term "production release" 
-    diffferent companies have different prod 
-- (Mike G)
-  - Github 17 times per day - some cost? only github employees see them
-  - github know who logs in, they use gihub to build github
-  - we need feedback from users, cost and benefit
-- (Bill)
-  - feature toggle - what is and why we want to use it?
-  - what is feature flag? conditions in the code- turn on and off
-    your features -martin fowler
-
-# Scaling apps with Kubernetes
 
 - *I get the following error.  It is because I used -f instead of -k
 
@@ -417,8 +944,8 @@ ingress.networking.k8s.io/pal-tracker unchanged
 error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
 ```
 
-- *After horizontal scaling, the number of pods remain to be 2. It should have been 1.
-  It took time.  But eventually, it became 1.
+- *After horizontal scaling, the number of pods remain to be 2 instances. 
+  It should have been 1. It took time.  But eventually, it became 1.
   
   
 ## Wrap-up
@@ -434,13 +961,97 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
     
 - Mile is against auto-scaling.  ??Why
 
-# Migration
 
-Error in the lab. grab17
+  
+# Liveness Probes-----------------------
+
+- ??step 6 - it is not 10 seconds it is 2 and half miunutes
+- ??step 7 strange behavior - use siege instead of browser
+
+- Verify the following
 
 ```
-- run: sudo /etc/init.d/postgresql restart
+5. View 
+
+View the Events section. You will see the correlated event of liveness probe failures, pod disposal, and creation.
 ```
+
+# Multiple Enviroments------------------
+
+- *After reseting pal-tracker-k8s-development to multi-environment solution, I get the following error. (answer) I have to use -k like `kubectl apply -k k8s/environments/development`
+
+```
+ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/review
+configmap/pal-tracker created
+ingress.networking.k8s.io/pal-tracker created
+error: error validating "k8s/environments/review/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
+
+ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/development
+configmap/pal-tracker configured
+ingress.networking.k8s.io/pal-tracker configured
+error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
+```
+
+# Deployment Pipelines-------------------
+
+## Intro
+
+- What is CI, why CI?
+  - many developers are working on a project, we can move faster,
+  - remove merge conflict after waiting for a week
+- steps for CI (bill used PCF slide)
+- Bill likes concourse - versioning jar files
+- what and why CD? 
+  - make our app to be usable, release frequently
+  - deploy smoothly and consistently
+  - Bill does not like to use the term "production release" 
+    diffferent companies have different prod 
+- (Mike G)
+  - Github 17 times per day - some cost? only github employees see them
+  - github know who logs in, they use gihub to build github
+  - we need feedback from users, cost and benefit
+- (Bill)
+  - feature toggle - what is and why we want to use it?
+  - what is feature flag? conditions in the code- turn on and off
+    your features -martin fowler
+
+# Spring MVC with REST Endpoints-------
+
+## Tips
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ get-k8s-domain
+The domain for your K8s cluster is
+
+     54.153.72.214.nip.io
+
+The domain is added to your copy/paste buffer, feel free to paste into your ingress or CI deployment configurations.
+
+ubuntu@mylab:~/workspace/pal-tracker$ curl 54.153.72.214.nip.io
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.15.8</center>
+</body>
+</html>
+
+ubuntu@mylab:~/workspace/pal-tracker$ curl 54.153.72.214.nip.io/time-entries
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.15.8</center>
+</body>
+</html>
+
+ubuntu@mylab:~/workspace/pal-tracker$ curl review.tracker.54.153.72.214.nip.io/time-entries
+[]
+ubuntu@mylab:~/workspace/pal-tracker$ curl review.tracker.54.153.72.214.nip.io
+hello from review
+```
+
+# Database Migrations------------------
 
 - [psql commands](https://www.postgresqltutorial.com/psql-commands/)
 
@@ -552,67 +1163,38 @@ This is from the document
 flyway -url="jdbc:postgresql://ELEPHANT_SQL_SERVER:5432/ELEPHANT_SQL_DATABASE" -locations=filesystem:databases/tracker migrate -user=ELEPHANT_SQL_USER -password=ELEPHANT_SQL_PASSWORD
 ```
 
-With my server info filled in
-
-url from the elephant server - MAKE SURE TO click the eye-icon to see the full path
-
 ```
-postgres://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd 
-```
+< workspace/pal-tracker + master > flyway -url="jdbc:postgresql://ruby.db.elephantsql.com:5432/malyyjbd" -locations=filesystem:databases/tracker migrate -user=malyyjbd -password=i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ
+Flyway Community Edition 6.5.2 by Redgate
+Database: jdbc:postgresql://ruby.db.elephantsql.com:5432/malyyjbd (PostgreSQL 11.8)
+Successfully validated 1 migration (execution time 00:00.340s)
+Current version of schema "public": 1
+Schema "public" is up to date. No migration necessary.
 
-```
-~/workspace/pal-tracker$ flyway -url="jdbc:postgres://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd" -locations=filesystem:databases/tracker migrate -user=sashin@vmware.com -password=i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ
+< workspace/pal-tracker + master > psql -h ruby.db.elephantsql.com -U malyyjbd
+Password for user malyyjbd:
+psql (13.0 (Ubuntu 13.0-1.pgdg20.04+1), server 11.8 (Ubuntu 11.8-1.pgdg20.04+1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, bits: 256, compression: off)
+Type "help" for help.
 
-Flyway Community Edition 6.3.1 by Redgate
-ERROR: 
-Unable to obtain connection from database (jdbc:postgresql://ruby.db.elephantsql.com:5432/malyyjbd) for user 'sashin@vmware.com': FATAL: no pg_hba.conf entry for host "3.235.179.117", user "sashin@vmware.com", database "malyyjbd", SSL on
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-SQL State  : 28000
-Error Code : 0
-Message    : FATAL: no pg_hba.conf entry for host "3.235.179.117", user "sashin@vmware.com", database "malyyjbd", SSL on
+malyyjbd=> \d time_entries
+                              Table "public.time_entries"
+   Column   |  Type   | Collation | Nullable |                 Default
+------------+---------+-----------+----------+------------------------------------------
+ id         | bigint  |           | not null | nextval('time_entries_id_seq'::regclass)
+ project_id | bigint  |           |          |
+ user_id    | bigint  |           |          |
+ date       | date    |           |          |
+ hours      | integer |           |          |
+Indexes:
+    "time_entries_pkey" PRIMARY KEY, btree (id)
 
-```
-
-```
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ flyway -url="jdbc: postgresql://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd" -locations=filesystem:databases/tracker migrate -user=sashin@vmware.com -password=i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ
-ERROR: Unable to autodetect JDBC driver for url: jdbc: postgresql://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd
-```
-
-```
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ flyway -url="jdbc:postgres://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd" -locations=filesystem:databases/tracker migrate -user=sashin@vmware.com -password=i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ
-ERROR: Unable to autodetect JDBC driver for url: jdbc:postgres://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd
+malyyjbd=> \q
 ```
 
-```
-psql -h ELEPHANT_SQL_SERVER -U ELEPHANT_SQL_USER
-```
+# Spring JDBC Template------------------
 
-```
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ psql -h ruby.db.elephantsql.com -U sashin@vmware.com
-Password for user sashin@vmware.com: 
-psql: FATAL:  password authentication failed for user "sashin@vmware.com"
-FATAL:  password authentication failed for user "sashin@vmware.com"
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ psql -h ruby.db.elephantsql.com -U malyyjbd
-Password for user malyyjbd: 
-psql: FATAL:  password authentication failed for user "malyyjbd"
-FATAL:  password authentication failed for user "malyyjbd"
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ psql -h ruby.db.elephantsql.com -U malyyjbd -W i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ
-Password: 
-psql: FATAL:  no pg_hba.conf entry for host "3.235.179.117", user "malyyjbd", database "i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ", SSL on
-FATAL:  no pg_hba.conf entry for host "3.235.179.117", user "malyyjbd", database "i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ", SSL off
-
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ psql -h ruby.db.elephantsql.com (ruby-01) -U malyyjbd
-bash: syntax error near unexpected token `('
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ psql -h "ruby.db.elephantsql.com (ruby-01)" -U malyyjbd
-psql: could not translate host name "ruby.db.elephantsql.com (ruby-01)" to address: Name or service not known
-
-```
-
-# Secret
+# Using Secrets to Store Credentials----
 
 ## Intro
 
@@ -712,5 +1294,5 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
 ## Wrap-up
 
 - Mike reiterates why we do not have the security sensitive data in
-  the file - it might be accidentally checked in
-- Mike shows the similarity/difference between configmap example
+  the file - it is to eliminate any possibility might be accidentally checked in
+- Mike shows the similarity/difference between configmap example ??
