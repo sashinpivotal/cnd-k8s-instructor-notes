@@ -257,6 +257,7 @@ on later time, you do the following:
 -   git add .
 -   git commit -m “work in progress in my lab”
 -   git push origin wip-branch --tags
+-   git checkout master
 ```
     
 ```
@@ -679,13 +680,13 @@ public class WelcomeController {
 
     // This works
     @GetMapping("/dest1")
-    public String talkToDest2() {
+    public String talkToDest1() {
         return restTemplate.getForObject("http://dest.3.101.115.109.nip.io", String.class);
     }
 
     // This does not work
     @GetMapping("/dest2")
-    public String talkToDest1() {
+    public String talkToDest2() {
         return restTemplate.getForObject("http://pal-tracker-dest", String.class);
     }
 }
@@ -796,6 +797,9 @@ This article describes how to set up a cluster to ingest logs into Elasticsearch
   https://blog.questionable.services/article/kubernetes-deployments-configmap-change/
 - (Bill) its behavior is similar to PCF where changing environment variables
   does not automatically restart the apps
+- (Mike) Also when you do auto-scale, only the new apps will
+  pick up the change, so if you want to make all apps use the
+  new config values, redeploy all app instances fresh
 - (Charles) You might be in the process of updating configuration
   files, which you do not want to get reflected right away
 - Fedex is using spring cloud config server for getting common
@@ -870,10 +874,29 @@ The code example in the PalTrackerFailure is an example of one way to define a L
 ## Wrap-up
 
 - transistent failure to backing service - network blip, connection pool resource
+- connection pool, thread pool could cause transient failre
+- we don't want k8s to throw away for the transistent failures
 - application should deal with transitent failure - production env - you can tune only in production
 - what would be good candidates for liveness probes - out of memory, not network blip
+- explain the availabilityevent code
+- traffice pattern through time-series database collected by 3rd party system
+
+## Resources
+
+- https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 
 # Configuring RollingUpdate Deployments----
+
+## Intro
+
+- what is rolling updates
+   - default strategy - whenever you change your deployment.yaml file
+     it starts a new pod while leaving the old pod running
+- value of rolling updates
+   - minimize the downtime (Bill clarified it is a blip?)
+- just because a pod running does not mean it is ready to handle the requests
+  maybe it needs backing service and the backing service is not ready yet
+- we are going to exercise a few options
 
 ## Tips
 
@@ -918,8 +941,12 @@ docker push axykim00/pal-tracker:v2
 
 ## Wrap-up
 
+- Bill uses the 3 screens - loadtest on the top, k get pod --watch 
+  on the bottom left, and 3rd termainl for k apply -f
+
+- k8s life cycle hooks such as preStop?
 - ??two messages race condition
-  - show architecure document - controller is a loop checking etds for messages
+  - show architecure document - controller is a loop checking, etds for messages
   - delete pod (pod controller picked up) - will wait 10 seconds before killing it
   - stop routing message (by service controller)
   - ?? spring drain 
@@ -930,6 +957,51 @@ docker push axykim00/pal-tracker:v2
   - strip out as much as from yur spring boot app - faster start up
   - stopping micro-services?? challenge
   - scalabilty
+
+- pcf gorouter handles ingress traffic
+- pcf handles unregistering app from routing table first before
+  terminating it, k8s is not so good on that 
+- k8s is a toolbox not paas
+- it does not handle networking either
+- Read the references in this lab, it is using the same solution
+
+- why we need prestop hook, the terminiating time, and routing table update
+  - completely asynchronous
+  - what benefit does it give? making systems simpler, no mutex required
+    engineering decision by k8s, 
+    routes in the etcd
+  - deregistration of a terminated app
+    from routing does not occur before terminaing the pod
+  - empirical evidence of 10 seconds - why do not care about the dration
+    as long as it is not 6 months - not much risk to the overall performance
+    you apps might be different - you need to test around and tune it
+    making 100 seconds will make disposability hard - you want your
+    system to start fast and shut down fast 
+    
+    pcf platform operators are involved, security voluntability,
+    developer says this is is the state of the applicastions
+    rip infrastruure under you
+    
+    k8s could work the same way,
+    
+- is there any higher-level construct that unnecessiate the pre-stop?
+- what about blue-green deployment? Are you relying pcf to do that or
+  do you roll out your custom steps?
+  
+- solution pattern: drain?? prestop, what about the traffic in the process
+  of being handled
+  drain - I am not going to 
+  
+- does bootImageBuild anything about k8s?
+  k8s directory does not have to be within pal-tracker
+  
+- changing to v0 is to make deployment change
+- we need v2, but we don't need v3
+
+- is it good practice to have k8s and code single platform
+- pros and cons
+- 12 factor says the separation of configuration
+- simplicity in one repo (Mike G)
   
   
 # Scaling an App with Kubernetes--------
@@ -947,8 +1019,26 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
 - *After horizontal scaling, the number of pods remain to be 2 instances. 
   It should have been 1. It took time.  But eventually, it became 1.
   
+## Intro
+
+- cloud native app favors horizontal scaling
+- read reference doc's
+- this lab is a bit different starting and endppoint are the same lab
+- read the lab document carefully, a lot of narratives
+  
   
 ## Wrap-up
+
+- Number of pods = (#concurrent users * workrate)/ (max allowed work rate per pod)
+  - (500 * 50)/100 -> 25
+  - we build the profile - by observing the load requests
+  - we can experical performance test for pod 
+  - linear expolartion
+  - this assumes the pod is not maintaining state
+- can you linear expolarate from vertical scaling?
+  - cpu maybe linear on bare metal but it is hard to do that on vm
+  - memory does not scale linearly
+  - this is why cloud native favors horizontal scaling
 
 - Bill - what metrics do you see to determine memory requirement?
   - for Web app - throughput is primary criteria, cpu might not
@@ -959,11 +1049,29 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
   - show the knobs and dials in the reference document - you
     have to understand the traffic pattern
     
-- Mile is against auto-scaling.  ??Why
+- Mike is against auto-scaling.  ??Why
 
-
+- tradeoffs and consideration section
+  - throttle
+  - greenfield vs legacy apps (bare metai)
+- javs threads feature (not available in java 8) - jvm problem
+  - exacerbated in pcf due to core
+  - greenfield assumes latest java
   
 # Liveness Probes-----------------------
+
+## Intro (Charles)
+
+- difference between readiness vs liveness recovery
+- explain the failure endpoint, we used in the previous lab
+  - we use it to simulate the failure of an application
+- ?? read section 5 for tuning
+- availability section
+- scaling and availabilty are two different concepts
+
+- imperative (scale command) vs declative (yaml file with replicas)
+
+## Trouble-shooting
 
 - ??step 6 - it is not 10 seconds it is 2 and half miunutes
 - ??step 7 strange behavior - use siege instead of browser
@@ -976,21 +1084,118 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
 View the Events section. You will see the correlated event of liveness probe failures, pod disposal, and creation.
 ```
 
+## Wrap-up
+
+- when liveness probe results in restarting the container, 
+  note that it is still the same pod - it just restarts
+  the container process within the same pod - think about
+  a hypothetical case where you have 5 containers running
+  in a single pod, the container that has the liveness
+  probe will be restarted
+- [Configure Livness, Readiness, Statup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
+
+
 # Multiple Enviroments------------------
 
-- *After reseting pal-tracker-k8s-development to multi-environment solution, I get the following error. (answer) I have to use -k like `kubectl apply -k k8s/environments/development`
+## Intro
+
+- So far, we've been working in a single environment with a single
+  set of k8s resources, which includes configmap, service, deployment
+  and that is highly unrealistic 
+  
+
+## Trouble-shooting
+
+- ?? When I deploy, I got readiness probe error - needs investigation
+  - once I changed the default namespace to development from review,
+    it worked OK
+    
+- ?? I kept getting the following error even with solution project
+  with correct domain.  logs and describe does not show any sign
+  of problems.  It has something to do with Readiness probe.
+  When I removed readiness proble from the deployment.yaml file,
+  it worked.  It seems like readiness probe is set as false
+  as intial value.
+  
+```
+< workspace/pal-tracker + master > !350
+curl development.tracker.3.101.115.109.nip.io
+<html>
+<head><title>503 Service Temporarily Unavailable</title></head>
+<body>
+<center><h1>503 Service Temporarily Unavailable</h1></center>
+<hr><center>nginx/1.15.8</center>
+</body>
+</html>
+```
+
+- *Several people, even after they change the configmap, 
+  and then performed "kubectl apply", yet they still
+  see the old message.  It is because changing configmap
+  does not trigger the rolling update of the pods.
+  - try to add dummy env name and value
+  
+- *After reseting pal-tracker-k8s-development to multi-environment 
+  solution, I get the following error. (answer) I have to use -k 
+  like `kubectl apply -k k8s/environments/development`
 
 ```
 ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/review
 configmap/pal-tracker created
 ingress.networking.k8s.io/pal-tracker created
 error: error validating "k8s/environments/review/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/development
-configmap/pal-tracker configured
-ingress.networking.k8s.io/pal-tracker configured
-error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
 ```
+
+- When I added RestTemplateBuilder through a constructor, I get
+  the following "k get logs <pod>"
+  
+```
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'welcomeController' defined in file [/workspace/BOOT-INF/classes/io/pivotal/pal/tracker/WelcomeController.class]: Instantiation of bean failed; nested exception is org.springframework.beans.BeanInstantiationException: Failed to instantiate [io.pivotal.pal.tracker.WelcomeController]: No default constructor found; nested exception is java.lang.NoSuchMethodException: io.pivotal.pal.tracker.WelcomeController.<init>()
+```
+
+## Experimentation - calling another pod
+
+https://stackoverflow.com/questions/58733807/what-is-the-value-of-get-hosts-from-variable
+
+- *I get the following error when accessing the review service
+  using ip address - it was because downstream service returns 
+  connection timeout - it was because the port number was not
+  specified
+
+```
+curl development.tracker.3.101.115.109.nip.io/dest3
+<html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+<hr><center>nginx/1.15.8</center>
+</body>
+</html>
+```
+
+## Wrap-up
+
+-  Namespaces 
+   - used to divide cluster resources
+   - names of the resources need to be unique within a namespace
+     but not across the namespaces and a resource can 
+     be only in a single namespace
+   - we now have pods running in different namespaces, how
+     do they communicate?
+     
+-  Ingress
+   - we use different host
+   - it also supports two different services being routed to different path
+   
+## Challenge exercises
+
+-  Write controller code in pod1 in namespace1 to access pod2 in namespace2
+
+
+## Resources
+
+- [Helm vs Kustomize](https://blog.boltops.com/2020/11/05/kustomize-vs-helm-vs-kubes-kubernetes-deploy-tools)
+- [Helm vs Kustomize: How to deploy your apps oin 2020](https://medium.com/@alexander.hungenberg/helm-vs-kustomize-how-to-deploy-your-applications-in-2020-67f4d104da69)   
 
 # Deployment Pipelines-------------------
 
@@ -1027,24 +1232,6 @@ The domain for your K8s cluster is
 
 The domain is added to your copy/paste buffer, feel free to paste into your ingress or CI deployment configurations.
 
-ubuntu@mylab:~/workspace/pal-tracker$ curl 54.153.72.214.nip.io
-<html>
-<head><title>404 Not Found</title></head>
-<body>
-<center><h1>404 Not Found</h1></center>
-<hr><center>nginx/1.15.8</center>
-</body>
-</html>
-
-ubuntu@mylab:~/workspace/pal-tracker$ curl 54.153.72.214.nip.io/time-entries
-<html>
-<head><title>404 Not Found</title></head>
-<body>
-<center><h1>404 Not Found</h1></center>
-<hr><center>nginx/1.15.8</center>
-</body>
-</html>
-
 ubuntu@mylab:~/workspace/pal-tracker$ curl review.tracker.54.153.72.214.nip.io/time-entries
 []
 ubuntu@mylab:~/workspace/pal-tracker$ curl review.tracker.54.153.72.214.nip.io
@@ -1077,7 +1264,8 @@ flyway -url="jdbc:postgresql://ELEPHANT_SQL_SERVER:5432/ELEPHANT_SQL_DATABASE" -
 
 With my server info filled in
 
-url from the elephant server - MAKE SURE TO click the eye-icon to see the full path
+- Ignore url from the elephant server
+- Username and database name is the same
 
 ```
 postgres://malyyjbd:i-qrVszWjVTrYoVi99yuC-Pov-ajmkdQ@ruby.db.elephantsql.com:5432/malyyjbd 
@@ -1192,7 +1380,28 @@ Indexes:
 malyyjbd=> \q
 ```
 
+## Trouble-shooting
+
+- *I am experiencing the following concourse problem
+
+```
+selected worker: 041e690158c9
+Cloning into '/tmp/semver-git-repo'...
+warning: Could not find remote branch build to clone.
+fatal: Remote branch build not found in upstream origin
+error bumping version: exit status 128
+```
+
+  (Answer) Everytime you change the pipeline change, you have to
+  apply it
+
+```
+fly -t concourse set-pipeline -c ci/pipeline.yaml -p pal-tracker -l ci/variables-pal-tracker.yaml
+```
+
 # Spring JDBC Template------------------
+
+
 
 # Using Secrets to Store Credentials----
 
@@ -1245,51 +1454,6 @@ pal-tracker-review-864c88bb5c-8sgwl   1/1     Running            0          2d14
 
 ```
 
-```
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ kubectl logs -lapp=pal-tracker -f
-2020-07-29 09:09:51.466  INFO 1 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.36]
-2020-07-29 09:09:53.764  INFO 1 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2020-07-29 09:09:53.765  INFO 1 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 46696 ms
-2020-07-29 09:10:11.073  INFO 1 --- [           main] o.s.s.concurrent.ThreadPoolTaskExecutor  : Initializing ExecutorService 'applicationTaskExecutor'
-2020-07-29 09:10:20.671  INFO 1 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoint(s) beneath base path '/actuator'
-2020-07-29 09:10:22.370  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
-2020-07-29 09:10:22.866  INFO 1 --- [           main] i.p.pal.tracker.PalTrackerApplication    : Started PalTrackerApplication in 91.014 seconds (JVM running for 102.645)
-2020-07-29 09:10:26.470  INFO 1 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2020-07-29 09:10:26.563  INFO 1 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2020-07-29 09:10:26.871  INFO 1 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 308 ms
-^C
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ kubectl logs -lapp=pal-tracker -f -n review
-
-Reason: Failed to determine a suitable driver class
-
-
-Action:
-
-Consider the following:
-	If you want an embedded database (H2, HSQL or Derby), please put it on the classpath.
-	If you have database settings to be loaded from a particular profile you may need to activate it (no profiles are currently active).
-
-2020-07-29 01:18:41.417  INFO 1 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.36]
-2020-07-29 01:18:41.667  INFO 1 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2020-07-29 01:18:41.670  INFO 1 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 4420 ms
-2020-07-29 01:18:43.175  INFO 1 --- [           main] o.s.s.concurrent.ThreadPoolTaskExecutor  : Initializing ExecutorService 'applicationTaskExecutor'
-2020-07-29 01:18:44.111  INFO 1 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoint(s) beneath base path '/actuator'
-2020-07-29 01:18:44.258  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
-2020-07-29 01:18:44.297  INFO 1 --- [           main] i.p.pal.tracker.PalTrackerApplication    : Started PalTrackerApplication in 8.459 seconds (JVM running for 9.588)
-2020-07-29 01:18:52.790  INFO 1 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2020-07-29 01:18:52.793  INFO 1 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2020-07-29 01:18:52.823  INFO 1 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 29 ms
-```
-
-- *After secret db-credentials is created, run the following command - failure
-  (answer - I have to use -k)
-
-```
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ k apply -f k8s/environments/development
-configmap/pal-tracker configured
-ingress.networking.k8s.io/pal-tracker configured
-error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-```
 
 ## Wrap-up
 
