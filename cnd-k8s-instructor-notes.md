@@ -915,8 +915,8 @@ pal-tracker-7f9885f6c7-wq72v   0/1     Terminating         0          3h30m
 
 ```
 ./gradlew bootBuildImage
-docker tag pal-tracker YOUR-DOCKER-HUB-USERNAME/pal-tracker:v2
-docker push YOUR-DOCKER-HUB-USERNAME/pal-tracker:v2
+docker tag pal-tracker ${YOUR_DOCKER_HUB_USERNAME}/pal-tracker:v2
+docker push ${YOUR_DOCKER_HUB_USERNAME}/pal-tracker:v2
 ```
 
 - this is how to create a new version
@@ -924,6 +924,8 @@ docker push YOUR-DOCKER-HUB-USERNAME/pal-tracker:v2
 ```
 ./gradlew bootBuildImage --imageName=axykim00/pal-tracker:v2
 docker push axykim00/pal-tracker:v2
+
+docker run --env-file=dockerenv --rm -p 8080:8080 ${YOUR_DOCKER_HUB_USERNAME}/pal-tracker:v2
 ```
 
 ## Wrap-up
