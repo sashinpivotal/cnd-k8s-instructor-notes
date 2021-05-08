@@ -521,54 +521,24 @@ spec:
 ```
 
 
-- *what about the following?  (this is due to k 1.8 vs 1.9 difference)
-
-```
-apiVersion: networking.k8s.io/v1beta1
-kind: Ingress
-metadata:
-  name: pal-tracker
-  labels:
-    app: pal-tracker
-  annotations:
-    kubernetes.io/ingress.class: nginx
-spec:
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: pal-tracker
-            port:
-              number: 8080
-```
-
-You the following error
-
-```
-ubuntu@mylab:~/workspace/k8s$ k apply -f .
-deployment.apps/pal-tracker unchanged
-service/pal-tracker unchanged
-error: error validating "ingress.yaml": error validating data: ValidationError(Ingress.spec.rules[0].http.paths[0].backend): unknown field "service" in io.k8s.api.networking.v1beta1.IngressBackend; if you choose to ignore these errors, turn validation off with --validate=false
-```
-
 - ?? How do I find how many containers are running in a pod
 
 ```
+get-k8s-domain
+
 ubuntu@mylab:~/workspace/pal-tracker$ curl pal-tracker:8080 
 curl: (6) Could not resolve host: pal-tracker
-ubuntu@mylab:~/workspace/pal-tracker$ k get n
-hello from kubernetesubuntu@mylab:~/workspace/pal-tracker$ k get node
+
+
+ubuntu@mylab:~/workspace/pal-tracker$ k get node
 NAME    STATUS   ROLES    AGE     VERSION
 mylab   Ready    <none>   7h34m   v1.20.6-34+e4abae43f6acde
+
 ubuntu@mylab:~/workspace/pal-tracker$ curl mylab:8080
 curl: (7) Failed to connect to mylab port 8080: Connection refused
-ubuntu@mylab:~/workspace/pal-tracker$ curl myla
-curl: (6) Could not resolve host: myla
-ubuntu@mylab:~/workspace/pal-tracker$ curl mylab
 
+ubuntu@mylab:~/workspace/pal-tracker$ curl mylab
+hello
 ```
 
 
@@ -841,6 +811,46 @@ docker run --env-file=dockerenv --rm -p 8080:8080 ${YOUR_DOCKER_HUB_USERNAME}/pa
 
 - ?? Running on K8s fails because pod's actuator/health/readiness returns 404
   So where does it get the environment variable setting?
+  
+- What does the following mean? Container image already present on machine
+
+```
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  32s   default-scheduler  Successfully assigned development/pal-tracker-85bbb46c88-mwt8h to mylab
+  Normal  Pulled     31s   kubelet            Container image "axykim00/pal-tracker:v2" already present on machine
+  Normal  Created    31s   kubelet            Created container pal-tracker-container
+  Normal  Started    31s   kubelet            Started container pal-tracker-container
+```
+
+
+- If I push a new iamge,it pulled it OK as shown below
+
+```
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  30s   default-scheduler  Successfully assigned development/pal-tracker-5876969cff-p9r7q to mylab
+  Normal  Pulling    29s   kubelet            Pulling image "axykim00/pal-tracker:v9"
+  Normal  Pulled     27s   kubelet            Successfully pulled image "axykim00/pal-tracker:v9" in 2.188856155s
+  Normal  Created    27s   kubelet            Created container pal-tracker-container
+  Normal  Started    27s   kubelet            Started container pal-tracker-container
+
+```
+
+- The following is how to remove images in the microk8s
+
+```
+  423  microk8s config
+  424  microk8s ctr images ls
+  425  microk8s ctr images ls |grep pal-tracker
+  426  microk8s ctr images rm docker.io/axykim00/pal-tracker:v2
+  427  microk8s ctr images rm docker.io/axykim00/pal-tracker:v9
+  428  microk8s ctr images rm docker.io/axykim00/pal-tracker:v1
+  429  microk8s ctr images rm docker.io/axykim00/pal-tracker:v0
+  430  microk8s ctr images ls |grep pal-tracker
+```
 
 ## Wrap-up
 
@@ -890,7 +900,7 @@ Events:
 - load test command
 
 ```
-run-load-test -d 300 -u 10 -w 10 -n development http://54.151.120.233.nip.io
+run-load-test -d 300 -u 10 -w 10 -n development tracker.k8s.local
 ```
 
 ```
@@ -917,6 +927,9 @@ pal-tracker-7f9885f6c7-wq72v   0/1     Terminating         0          3h30m
 ./gradlew bootBuildImage
 docker tag pal-tracker ${YOUR_DOCKER_HUB_USERNAME}/pal-tracker:v2
 docker push ${YOUR_DOCKER_HUB_USERNAME}/pal-tracker:v2
+
+k delete -f k8s
+k apply -f k8s
 ```
 
 - this is how to create a new version
