@@ -900,7 +900,7 @@ Events:
 - load test command
 
 ```
-run-load-test -d 300 -u 10 -w 10 -n development tracker.k8s.local
+run-load-test -d 300 -u 10 -w 10 -n development http://tracker.k8s.local
 ```
 
 ```
@@ -1009,15 +1009,6 @@ docker run --env-file=dockerenv --rm -p 8080:8080 ${YOUR_DOCKER_HUB_USERNAME}/pa
 # Scaling an App with Kubernetes--------
 
 
-- *I get the following error.  It is because I used -f instead of -k
-
-```
-ubuntu@ip-172-31-87-179:~/workspace/pal-tracker$ k apply -f k8s/environments/development
-configmap/pal-tracker unchanged
-ingress.networking.k8s.io/pal-tracker unchanged
-error: error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-```
-
 - *After horizontal scaling, the number of pods remain to be 2 instances. 
   It should have been 1. It took time.  But eventually, it became 1.
   
@@ -1027,9 +1018,27 @@ error: error validating "k8s/environments/development/kustomization.yaml": error
 - read reference doc's
 - this lab is a bit different starting and endppoint are the same lab
 - read the lab document carefully, a lot of narratives
+
+## Trouble-shooting
+
+- ?? What is the following for?  It is a warning and things worked fine.  k delete and apply got rid of these messages
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ k apply -f k8s
+Warning: resource configmaps/pal-tracker is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+configmap/pal-tracker configured
+Warning: resource deployments/pal-tracker is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+deployment.apps/pal-tracker configured
+Warning: resource ingresses/pal-tracker is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+ingress.networking.k8s.io/pal-tracker configured
+Warning: resource services/pal-tracker is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+service/pal-tracker configured
+```
   
   
 ## Wrap-up
+
+- ?? So what is the number of pods based on the calculation?
 
 - Number of pods = (#concurrent users * workrate)/ (max allowed work rate per pod)
   - (500 * 50)/100 -> 25
@@ -1108,9 +1117,58 @@ View the Events section. You will see the correlated event of liveness probe fai
 
 ## Trouble-shooting
 
-- ?? When I deploy, I got readiness probe error - needs investigation
-  - once I changed the default namespace to development from review,
-    it worked OK
+- *Lab document to ask students to perform "k apply -f k8s"
+  but without ingress.yaml, you will see the following
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ kubectl apply -k k8s/environments/development
+configmap/pal-tracker-development created
+service/pal-tracker-development created
+deployment.apps/pal-tracker-development created
+The Ingress "pal-tracker-development" is invalid: spec: Invalid value: []networking.IngressRule(nil): either `defaultBackend` or `rules` must be specified
+```
+
+- *I got the following error "k apply -f k8s/environments/development" 
+  it is because I did "k appply -f" not "k apply -k"
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ k apply -f k8s/environments/development
+configmap/pal-tracker created
+error validating "k8s/environments/development/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
+Error from server (Invalid): error when creating "k8s/environments/development/ingress.yaml": Ingress.extensions "pal-tracker" is invalid: spec.rules[0].host: Invalid value: "development.{DOMAIN}": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+```
+
+- *{DOMAIN} needs to be replaced in the ingress.yaml
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ k apply -k k8s/environments/development
+configmap/pal-tracker-development unchanged
+service/pal-tracker-development unchanged
+deployment.apps/pal-tracker-development unchanged
+The Ingress "pal-tracker-development" is invalid: spec.rules[0].host: Invalid value: "development.{DOMAIN}": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+ubuntu@mylab:~/workspace/pal-tracker$ get-k8s-domain
+The domain for your K8s cluster is
+
+     tracker.k8s.local
+
+The domain is added to your copy/paste buffer, feel free to paste into your ingress or CI deployment configurations.
+ubuntu@mylab:~/workspace/pal-tracker$ ^C
+ubuntu@mylab:~/workspace/pal-tracker$ k apply -k k8s/environments/development
+configmap/pal-tracker-development unchanged
+service/pal-tracker-development unchanged
+deployment.apps/pal-tracker-development unchanged
+ingress.networking.k8s.io/pal-tracker-development created
+
+```
+
+- *check the currect url - it is development.tracker.k8s.local
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ curl tracker.k8s.local
+ubuntu@mylab:~/workspace/pal-tracker$ curl development.tracker.k8s.local
+hello from development
+```
+
     
 - ?? I kept getting the following error even with solution project
   with correct domain.  logs and describe does not show any sign
@@ -1137,16 +1195,6 @@ curl development.tracker.3.101.115.109.nip.io
   does not trigger the rolling update of the pods.
   - try to add dummy env name and value
   
-- *After reseting pal-tracker-k8s-development to multi-environment 
-  solution, I get the following error. (answer) I have to use -k 
-  like `kubectl apply -k k8s/environments/development`
-
-```
-ubuntu@ip-172-31-82-120:~/workspace/pal-tracker$ k apply -f k8s/environments/review
-configmap/pal-tracker created
-ingress.networking.k8s.io/pal-tracker created
-error: error validating "k8s/environments/review/kustomization.yaml": error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false
-```
 
 - When I added RestTemplateBuilder through a constructor, I get
   the following "k get logs <pod>"
