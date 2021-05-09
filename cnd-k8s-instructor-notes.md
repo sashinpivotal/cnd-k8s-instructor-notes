@@ -1269,6 +1269,36 @@ curl development.tracker.3.101.115.109.nip.io/dest3
   - feature toggle - what is and why we want to use it?
   - what is feature flag? conditions in the code- turn on and off
     your features -martin fowler
+    
+## Trouble-shooting
+
+- ?? The "Configure semantic version state tracking" should mention
+  that the following git commands should be done under "pal-tracker"
+  
+  
+```
+git branch build spring-boot-start
+git push origin build
+```  
+
+- ?? What is the spring-boot-start for?
+
+- ?? What is concourse pipeline username and password?
+
+
+```
+ubuntu@mylab:~/workspace/pal-tracker$ fly --target concourse login --concourse-url http://localhost:8888
+logging in to team 'main'
+
+navigate to the following URL in your browser:
+
+  http://localhost:8888/login?fly_port=33505
+
+token must be of the format 'TYPE VALUE', e.g. 'Bearer ...'
+token must be of the format 'TYPE VALUE', e.g. 'Bearer ...'
+or enter token manually (input hidden): 
+
+```
 
 # Spring MVC with REST Endpoints-------
 
